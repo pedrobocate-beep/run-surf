@@ -613,6 +613,21 @@ function firebaseServices(){
   }
   return firebaseServicesPromise;
 }
+function bestScorePerPlayer(scores,currentUid){
+  const byName=new Map();
+  for(const score of scores){
+    const key=score.name.trim().toLowerCase();
+    const previous=byName.get(key);
+    if(!previous){
+      byName.set(key,score);
+      continue;
+    }
+    const best=score.secs>previous.secs?score:previous;
+    const uid=previous.uid===currentUid||score.uid===currentUid?currentUid:best.uid;
+    byName.set(key,{...best,uid});
+  }
+  return [...byName.values()].sort((a,b)=>b.secs-a.secs||a.name.localeCompare(b.name));
+}
 const API={
   async create(name,password){
     const {auth,db,authSdk,dbSdk}=await firebaseServices();
@@ -672,13 +687,14 @@ const API={
     const result=await dbSdk.getDocs(dbSdk.query(
       dbSdk.collection(db,'scores'),dbSdk.orderBy('secs','desc'),dbSdk.limit(50)
     ));
-    return result.docs.map(item=>{
+    const scores=result.docs.map(item=>{
       const data=item.data();
       if(typeof data.name!=='string'||!Number.isFinite(data.secs)||data.secs<=0){
         throw new Error('O ranking contém um recorde inválido.');
       }
       return {uid:item.id,name:data.name,secs:data.secs};
     });
+    return bestScorePerPlayer(scores,W.userId).slice(0,50);
   }
 };
 
